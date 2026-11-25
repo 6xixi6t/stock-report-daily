@@ -26,5 +26,29 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+
+      # 首次部署: GitHub 偶发的"产物元数据不同步"会让这一步误报找不到 artifact
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: 等待后重试部署
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "首次部署失败(常见于产物元数据偶发不同步), 30 秒后重试..."
+          sleep 30
+
+      - id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: 判定最终结果
+        if: always()
+        run: |
+          if [ "${{ steps.deployment.outcome }}" = "success" ] || [ "${{ steps.deployment_retry.outcome }}" = "success" ]; then
+            echo "部署成功"
+          else
+            echo "部署连续失败, 请到 Actions 页面检查"
+            exit 1
+          fi
